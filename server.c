@@ -18,7 +18,6 @@ int main(int argc,char *argv[])
 	int sev_map_udp_sk;
 	struct sockaddr_in sev_map_udp_addr;
 	char sev_map_hostname[128];
-	struct hostent *sev_map_host;
 	// db server TCP socket
 	int db_server_tcp_sk;
 	int db_server_tcp_port;
@@ -26,10 +25,10 @@ int main(int argc,char *argv[])
 	char *tcp_ip_buf;
 	struct sockaddr_in db_server_tcp_addr;
 	char db_server_hostname[128];
-	struct hostent *db_server_host;
 	int len = sizeof(db_server_tcp_addr);
 	// sending message
 	char buf[BUFMAX];
+	struct hostent *host;
 
 	// Check if command input meets needs.
 	if (argc != 2)
@@ -60,12 +59,16 @@ int main(int argc,char *argv[])
 	// db server gets its own host name.
 	gethostname(db_server_hostname, sizeof(db_server_hostname));
 	// db server gets its own IP address.
-	db_server_host = gethostbyname(db_server_hostname);
+	host = gethostbyname(db_server_hostname);
+	if (host == (struct hostent *) NULL){
+		printf("db server failed to get its own IP.\n");
+		return -4;
+	}
 
 	// Organize message sent to service-map server
 	strcpy(buf, db_server_hostname);
 	strcat(buf, ",");
-	tcp_ip_buf = inet_ntoa(*((struct in_addr*) db_server_host->h_addr_list[0]));
+	tcp_ip_buf = inet_ntoa(*((struct in_addr*) host->h_addr_list[0]));
 	strcat(buf, tcp_ip_buf);
 	strcat(buf, ",");
 	sprintf(tcp_port_buf, "%d", db_server_tcp_port);
@@ -73,15 +76,15 @@ int main(int argc,char *argv[])
 
 	// Create UDP client socket for remote service-map server
 	// Get service-map server IP.
-	sev_map_host = gethostbyname(argv[1]);
-	if (sev_map_host == (struct hostent *) NULL){
-		printf("db server failed to create service-map udp socket.\n");
+	host = gethostbyname(argv[1]);
+	if (host == (struct hostent *) NULL){
+		printf("db server failed to get service-map server IP.\n");
 		return -4;
 	}
 	// Set socket
 	sev_map_udp_sk = socket(AF_INET,SOCK_DGRAM,0);
 	sev_map_udp_addr.sin_family = AF_INET;
-	memcpy(&sev_map_udp_addr.sin_addr, sev_map_host->h_addr, sev_map_host->h_length);
+	memcpy(&sev_map_udp_addr.sin_addr, host->h_addr, host->h_length);
 	sev_map_udp_addr.sin_port = ntohs(UDP_PORT);
 	// setsockopt is required on Linux, but not on Solaris
 	setsockopt(sev_map_udp_sk,SOL_SOCKET,SO_BROADCAST,(struct sockaddr *)&sev_map_udp_addr,sizeof(sev_map_udp_addr));
