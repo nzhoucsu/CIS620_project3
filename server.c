@@ -30,12 +30,14 @@ int main(int argc,char *argv[])
 	char buf[BUFMAX];
 	struct hostent *host;
 
+
 	// Check if command input meets needs.
 	if (argc != 2)
 	{
 		printf("Please input service-map server name.\n");
 		return -1;
 	}
+
 
 	// Create TCP server socket for local db server  
 	// and get its tcp port which is assigned by system
@@ -55,17 +57,17 @@ int main(int argc,char *argv[])
 	getsockname(db_server_tcp_sk, (struct sockaddr *) &db_server_tcp_addr, &len);
 	db_server_tcp_port = htons(db_server_tcp_addr.sin_port);
 
-	// Get local db server name, IP
-	// db server gets its own host name.
+
+	// Prepare message (db server host name, IP and port) sent to service-map server.
+	// Get db server hostname.
 	gethostname(db_server_hostname, sizeof(db_server_hostname));
-	// db server gets its own IP address.
+	// Get db server IP
 	host = gethostbyname(db_server_hostname);
 	if (host == (struct hostent *) NULL){
 		printf("db server failed to get its own IP.\n");
 		return -4;
 	}
-
-	// Organize message sent to service-map server
+	// Copy db server host name, IP and port into message buffer.
 	strcpy(buf, db_server_hostname);
 	strcat(buf, ",");
 	tcp_ip_buf = inet_ntoa(*((struct in_addr*) host->h_addr_list[0]));
@@ -73,6 +75,7 @@ int main(int argc,char *argv[])
 	strcat(buf, ",");
 	sprintf(tcp_port_buf, "%d", db_server_tcp_port);
 	strcat(buf, tcp_port_buf);
+
 
 	// Create UDP client socket for remote service-map server
 	// Get service-map server IP.
