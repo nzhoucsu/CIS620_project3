@@ -91,17 +91,16 @@ int main(int argc,char *argv[])
 	sev_map_udp_addr.sin_port = ntohs(UDP_PORT);
 	// setsockopt is required on Linux, but not on Solaris
 	setsockopt(sev_map_udp_sk,SOL_SOCKET,SO_BROADCAST,(struct sockaddr *)&sev_map_udp_addr,sizeof(sev_map_udp_addr));
-	
+
+	// Using UDP, send local db server name, IP and port to remote  service-map server
+	sendto(sev_map_udp_sk, buf, strlen(buf)+1, 0, (struct sockaddr *)&sev_map_udp_addr, sizeof(sev_map_udp_addr));
 	printf("\nDEBUG--- \n");
-	printf("%s\n", buf);
-	printf("\n");
+	printf("buf sending to service-map: %s\n", buf);
 
-	// // Using UDP, send local db server name, IP and port to remote  service-map server
-	// sendto(sev_map_udp_sk, buf, strlen(buf)+1, 0, (struct sockaddr *)&sev_map_udp_addr, sizeof(sev_map_udp_addr));
-
-	// // Using UDP, receive connection confirmation from remote service-map server.
-	// read(sev_map_udp_sk,buf,BUFMAX);
-	// printf("%s\n",buf); 
+	// Using UDP, receive connection confirmation from remote service-map server.
+	memset(buf, '\0', BUFMAX);
+	read(sev_map_udp_sk,buf,BUFMAX);
+	printf("\nDEBUG---\nbuf receiving from db server: %s\n",buf); 
 	close(sev_map_udp_sk);
 	close(db_server_tcp_sk);
 }
