@@ -7,9 +7,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
 
 #define BUFMAX 2048
 #define UDP_PORT 23997
+
+
+void signal_catcher(int the_sig){
+	wait(0);
+}
 
 
 int main(int argc,char *argv[])
@@ -29,6 +35,10 @@ int main(int argc,char *argv[])
 	// sending message
 	char buf[BUFMAX];
 	struct hostent *host;
+	// Client TCP socket
+	int clnt_tcp_sk;
+	struct sockaddr_in clnt_tcp_addr;
+	int msg_len;
 
 
 	// Check if command input meets needs.
@@ -91,15 +101,51 @@ int main(int argc,char *argv[])
 	sev_map_udp_addr.sin_port = ntohs(UDP_PORT);
 	// setsockopt is required on Linux, but not on Solaris
 	setsockopt(sev_map_udp_sk,SOL_SOCKET,SO_BROADCAST,(struct sockaddr *)&sev_map_udp_addr,sizeof(sev_map_udp_addr));
-
 	// Using UDP, send local db server name, IP and port to remote  service-map server
 	sendto(sev_map_udp_sk, buf, strlen(buf)+1, 0, (struct sockaddr *)&sev_map_udp_addr, sizeof(sev_map_udp_addr));
-
 	// Using UDP, receive connection confirmation from remote service-map server.
 	memset(buf, '\0', BUFMAX);
 	read(sev_map_udp_sk,buf,BUFMAX);
 	host = gethostbyname(argv[1]);
 	printf("Registration %s from %s %s\n",buf, argv[1], inet_ntoa(*((struct in_addr*) host->h_addr_list[0]))); 
+	// Close UDP socket for service-map server connection
 	close(sev_map_udp_sk);
-	close(db_server_tcp_sk);
+
+	// Start listenning sending through TCP ......
+	if (signal(SIGCHLD, signal_catcher) == SIG_ERR)
+	{
+		perror("SIGCHLD");
+		return 1;
+	}
+	if (listen(db_server_tcp_sk, 5) < 0)
+	{
+		close(db_server_tcp_sk);
+	}
+	do{
+		if ((clnt_tcp_sk=
+			accept(db_server_tcp_sk, (struct sockaddr*)&clnt_tcp_addr,&len)) < 0)
+		{
+			close(db_server_tcp_sk);
+			perror("accept error");
+			return 5;
+		}
+		if (fork()==0)
+		{
+			printf("client is coming ......\n");
+			close(db_server_tcp_sk);
+			msg_len = recv(clnt_tcp_sk, buf, BUFMAX, 0);
+			printf("%s\n", buf);
+			if (send(clnt_tcp_sk, buf, msg_len, 0) == -1)
+			{
+				perror("send error");
+				return -1;
+			}
+			close(clnt_tcp_sk);
+			return 0;
+		}
+		else{
+			close(clnt_tcp_sk);
+		}
+	}while(1);
+	return 0;
 }

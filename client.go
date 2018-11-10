@@ -21,8 +21,6 @@ func main() {
 	CheckError(err)
 	CLNS, err := net.ListenUDP("udp", LocalAddr)
 	CheckError(err)
-	defer CLNS.Close()
-
 	// Send request to service-map server to ask db server IP and port
 	hostname, err := os.Hostname()
 	CheckError(err)
@@ -30,12 +28,26 @@ func main() {
 	CheckError(err)
 	_, err = CLNS.WriteToUDP([]byte(hostaddrs[0]), ServerAddr)
 	CheckError(err)
-
-	// Get db server IP and port
+	// Get db server IP and port from service-map server
 	buff := make([]byte, 1024)
 	n, _, err := CLNS.ReadFromUDP(buff)
+	CheckError(err)
 	s = strings.Split(string(buff[0:n]), ":")
 	fmt.Println("Service provided by", s[0], "at port", s[1])
+	// Close UDP socket for communication between service-map server and client
+	CLNS.Close()	
+
+	// Set up TCP client socket for connection between db server and client
+	conn, err := net.Dial("tcp", string(buff[0:n]))
+	CheckError(err)
+	conn.Write([]byte("msg send from client"))
+	buffer := make([]byte, 1024)
+	conn.Read(buffer)
+	fmt.Println("messge back ......") 
+	fmt.Printf("%s\n",buffer) 
+	
+	conn.Close()
+	
 }
 
 
