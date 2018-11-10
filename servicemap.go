@@ -33,13 +33,12 @@ func main() {
             // Reply to db server
             _,err := ServerCLNS.WriteToUDP([]byte("OK"),addr)
             CheckError(err)
-        } else if strings.Compare(string(buf[0:n]), string([]byte("client_request"))) == 0 {
+        } else{
+            addr_s := strings.Split(string(buf[0:n]), ":")
+            fmt.Println("Received from", addr_s[0], ": GET", reg_map["hostname"]);
             _,err := ServerCLNS.WriteToUDP([]byte(reg_map["IP_port"]),addr)  
             CheckError(err)
-        } else { // wrong msg        
-            fmt.Println("Wrong message from db server or client")
-            os.Exit(0)
-        }
+        } 
     }
 }
 

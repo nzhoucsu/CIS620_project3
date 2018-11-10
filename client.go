@@ -24,7 +24,11 @@ func main() {
 	defer CLNS.Close()
 
 	// Send request to service-map server to ask db server IP and port
-	_, err = CLNS.WriteToUDP([]byte("client_request"), ServerAddr)
+	hostname, err := os.Hostname()
+	CheckError(err)
+	hostaddrs, err := net.LookupHost(hostname)
+	CheckError(err)
+	_, err = CLNS.WriteToUDP([]byte(hostaddrs[0]), ServerAddr)
 	CheckError(err)
 
 	// Get db server IP and port
