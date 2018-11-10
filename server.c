@@ -131,10 +131,9 @@ int main(int argc,char *argv[])
 		}
 		if (fork()==0)
 		{
-			printf("client is coming ......\n");
 			close(db_server_tcp_sk);
 			msg_len = recv(clnt_tcp_sk, buf, BUFMAX, 0);
-			printf("%s\n", buf);
+			printf("Service Requested from %s\n", buf);
 			if (send(clnt_tcp_sk, buf, msg_len, 0) == -1)
 			{
 				perror("send error");

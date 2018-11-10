@@ -40,12 +40,15 @@ func main() {
 	// Set up TCP client socket for connection between db server and client
 	conn, err := net.Dial("tcp", string(buff[0:n]))
 	CheckError(err)
-	conn.Write([]byte("msg send from client"))
-	buffer := make([]byte, 1024)
-	conn.Read(buffer)
+	fmt.Println("messge out ......") 
+	fmt.Println([]byte(hostaddrs[0])) 
+	n, err = conn.Write([]byte(hostaddrs[0]))
+	fmt.Println("send out",n,"characters")
+	n, err = conn.Read(buff)
 	fmt.Println("messge back ......") 
-	fmt.Printf("%s\n",buffer) 
-	
+	fmt.Println("send back",n,"characters")
+	s = strings.Split(string(buff[0:n]), ":")
+	fmt.Println(s[0])
 	conn.Close()
 	
 }
