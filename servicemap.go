@@ -31,12 +31,10 @@ func main() {
             reg_map["hostname"] = s[0]
             reg_map["IP_port"]  = strings.Join([]string{s[1],s[2]}, ":")
             // Reply to db server
-            _,err := ServerCLNS.WriteToUDP([]byte("OK"),addr) 
+            _,err := ServerCLNS.WriteToUDP([]byte("OK"),addr)
             CheckError(err)
         } else if strings.Compare(string(buf[0:n]), string([]byte("client_request"))) == 0 {
-            fmt.Println("DEBUG---")
-            fmt.Println("service-map server sends to client:", reg_map["IP_port"])
-            // _,err := ServerCLNS.WriteToUDP(reg_map["IP_port"],addr) 
+            _,err := ServerCLNS.WriteToUDP([]byte(reg_map["IP_port"]),addr)  
             CheckError(err)
         } else { // wrong msg        
             fmt.Println("Wrong message from db server or client")

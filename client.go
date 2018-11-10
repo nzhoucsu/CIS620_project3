@@ -12,9 +12,6 @@ func main() {
 	// Get service-map server IP
 	addrs, err := net.LookupHost(os.Args[1])
 	CheckError(err)
-	fmt.Println("DEBUG---")
-	fmt.Println("service-map server name is", os.Args[1])
-	fmt.Println("service-map server IP is", addrs[0])
 
 	// Set up UDP socket to communicate with service-map server
 	s := []string{addrs[0], "23997"}
@@ -32,8 +29,7 @@ func main() {
 
 	// Get db server IP and port
 	buff := make([]byte, 1024)
-	n, _, err := CLNS.ReadFromUDP(buff)
-	fmt.Println("Get from service-map server:", buff[0:n])
+	_, _, err = CLNS.ReadFromUDP(buff)
 }
 
 
