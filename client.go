@@ -33,7 +33,9 @@ func main() {
 
 	// Get db server IP and port
 	buff := make([]byte, 1024)
-	_, _, err = CLNS.ReadFromUDP(buff)
+	n, _, err := CLNS.ReadFromUDP(buff)
+	s = strings.Split(string(buff[0:n]), ":")
+	fmt.Println("Service provided by", s[0], "at port", s[1])
 }
 
 
