@@ -5,6 +5,9 @@ import (
 	"net"
 	"os"
 	"strings"
+	"bufio"
+	"encoding/binary"
+	"unsafe"
 )
 
 
@@ -57,5 +60,20 @@ func main() {
 func CheckError(err error){
 	if err != nil{
 		fmt.Println("Error: ", err)
+	}
+}
+
+func db_oprt(con net.Conn){
+	var s string
+	var iprt *uint32
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		s = scanner.Text()
+		iprt = (*uint32)(unsafe.Pointer(&s))
+		buf := make([]byte, 1024)
+		binary.BigEndian.PutUint32(buf, *iprt)
+		con.Write(buf)
+		// n, err = conn.Read(buff)
+		// fmt.Println(string(buff[0:n]))
 	}
 }
