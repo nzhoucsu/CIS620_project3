@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"unsafe"
 	"strconv"
+	"bytes"
 )
 
 
@@ -54,8 +55,7 @@ func main() {
 	// fmt.Println("send back",n,"characters")
 	// s = strings.Split(string(buff[0:n]), ":")
 	// fmt.Println(s[0])
-	conn.Close()
-	
+	conn.Close()	
 }
 
 
@@ -66,46 +66,48 @@ func CheckError(err error){
 }
 
 func db_oprt(con net.Conn){
-	var cmd  int32
-	var acct int32
+	var cmd  int
+	var acct int
 	var amnt float32
 	var iprt *uint32
-	var s string
-	buf := make([]byte, 4)
+	var err error
+	buf_cmd  := make([]byte, 4)
+	buf_acct := make([]byte, 4)
+	buf_amnt := make([]byte, 4)
+	buf := make([]byte, 30)
 	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		// s = scanner.Text()
-		s = strings.Split(scanner.Text(), " ")
-		if strings.Compare(s[0], "query") {
-			cmd = 1000
-			iprt = (*uint32)(unsafe.Pointer(&cmd))
-			binary.BigEndian.PutUint32(buf, *iprt)
-			con.Write(buf)
-			acct, err = strconv.Atoi(s[1])
-			CheckError(err)
-			iprt = (*uint32)(unsafe.Pointer(&acct))
-			binary.BigEndian.PutUint32(buf, *iprt)
-			con.Write(buf)
-
-		} else if strings.Compare(s[1], "update") {
-			cmd = 1001
-			iprt = (*uint32)(unsafe.Pointer(&cmd))
-			binary.BigEndian.PutUint32(buf, *iprt)
-			con.Write(buf)
-			acct, err = strconv.Atoi(s[1])
-			CheckError(err)
-			iprt = (*uint32)(unsafe.Pointer(&acct))
-			binary.BigEndian.PutUint32(buf, *iprt)
-			con.Write(buf)
-			amnt, err = strconv.ParseFloat(s[2], 32)
-			CheckError(err)
-			iprt = (*uint32)(unsafe.Pointer(&amnt))
-			binary.BigEndian.PutUint32(buf, *iprt)
-			con.Write(buf)
-		} else {
-			CheckError("Wrong command")
-		}
-		n, err = conn.Read(buff)
-		fmt.Println(string(buff[0:n]))
+	scanner.Scan()
+	s := strings.Split(scanner.Text(), " ")
+	if strings.Compare(s[0], "query") == 0 {
+		cmd = 1000
+		iprt = (*uint32)(unsafe.Pointer(&cmd))
+		binary.BigEndian.PutUint32(buf_cmd, *iprt)
+		acct, err = strconv.Atoi(s[1])
+		CheckError(err)
+		iprt = (*uint32)(unsafe.Pointer(&acct))
+		binary.BigEndian.PutUint32(buf_acct, *iprt)
+		s := [][]byte{buf_cmd, buf_acct}
+		buf_query := bytes.Join(s, []byte(""))
+		con.Write(buf_query)			
+	} else if strings.Compare(s[0], "update") == 0 {
+		cmd = 1001
+		iprt = (*uint32)(unsafe.Pointer(&cmd))
+		binary.BigEndian.PutUint32(buf_cmd, *iprt)
+		acct, err = strconv.Atoi(s[1])
+		CheckError(err)
+		iprt = (*uint32)(unsafe.Pointer(&acct))
+		binary.BigEndian.PutUint32(buf_acct, *iprt)
+		value, err := strconv.ParseFloat(s[2], 32)
+		CheckError(err)
+		amnt = float32(value)
+		iprt = (*uint32)(unsafe.Pointer(&amnt))
+		binary.BigEndian.PutUint32(buf_amnt, *iprt)
+		s := [][]byte{buf_cmd, buf_acct, buf_amnt}
+		buf_update := bytes.Join(s, []byte(""))
+		con.Write(buf_update)
+	} else {
+		fmt.Println("Wrong command")
 	}
+	n, err := con.Read(buf)
+	fmt.Println(string(buf[0:n]))
 }
