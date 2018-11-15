@@ -9,7 +9,6 @@
 #include <string.h>
 #include <signal.h>
 #include <fcntl.h>
-// #include <sys/types.h>
 
 #define BUFMAX 2048
 #define UDP_PORT 23997
@@ -32,11 +31,11 @@ void signal_catcher(int the_sig){
 
 int main(int argc,char *argv[])
 {
-	// service-map server UDP socket
+	// Variables for service-map server UDP socket
 	int sev_map_udp_sk;
 	struct sockaddr_in sev_map_udp_addr;
 	char sev_map_hostname[128];
-	// db server TCP socket
+	// Variables for db server TCP socket
 	int db_server_tcp_sk;
 	int db_server_tcp_port;
 	char tcp_port_buf[10];
@@ -44,15 +43,14 @@ int main(int argc,char *argv[])
 	struct sockaddr_in db_server_tcp_addr;
 	char db_server_hostname[128];
 	int len = sizeof(db_server_tcp_addr);
-	// sending message
+	// Variables for sending message
 	char buf[BUFMAX];
 	char buf_n[BUFMAX];
 	struct hostent *host;
-	// Client TCP socket
+	// Variables for client TCP socket
 	int clnt_tcp_sk;
 	struct sockaddr_in clnt_tcp_addr;
 	int msg_len;
-
 
 	// Check if command input meets needs.
 	if (argc != 2)
@@ -60,7 +58,6 @@ int main(int argc,char *argv[])
 		printf("Please input service-map server name.\n");
 		return -1;
 	}
-
 
 	// Create TCP server socket for local db server  
 	// and get its tcp port which is assigned by system
@@ -80,7 +77,6 @@ int main(int argc,char *argv[])
 	getsockname(db_server_tcp_sk, (struct sockaddr *) &db_server_tcp_addr, &len);
 	db_server_tcp_port = htons(db_server_tcp_addr.sin_port);
 
-
 	// Prepare message (db server host name, IP and port) sent to service-map server.
 	// Get db server hostname.
 	gethostname(db_server_hostname, sizeof(db_server_hostname));
@@ -99,7 +95,6 @@ int main(int argc,char *argv[])
 	sprintf(tcp_port_buf, "%d", db_server_tcp_port);
 	strcat(buf, tcp_port_buf);
 
-
 	// Create UDP client socket for remote service-map server
 	// Get service-map server IP.
 	host = gethostbyname(argv[1]);
@@ -114,7 +109,7 @@ int main(int argc,char *argv[])
 	sev_map_udp_addr.sin_port = ntohs(UDP_PORT);
 	// setsockopt is required on Linux, but not on Solaris
 	setsockopt(sev_map_udp_sk,SOL_SOCKET,SO_BROADCAST,(struct sockaddr *)&sev_map_udp_addr,sizeof(sev_map_udp_addr));
-	// Using UDP, send local db server name, IP and port to remote  service-map server
+	// Using UDP, send local db server name, IP and port to remote service-map server
 	sendto(sev_map_udp_sk, buf, strlen(buf)+1, 0, (struct sockaddr *)&sev_map_udp_addr, sizeof(sev_map_udp_addr));
 	// Using UDP, receive connection confirmation from remote service-map server.
 	memset(buf, '\0', BUFMAX);
@@ -142,9 +137,13 @@ int main(int argc,char *argv[])
 			perror("accept error");
 			return 5;
 		}
+		else{
+			printf("Service Requested from %s\n", inet_ntoa(clnt_tcp_addr.sin_addr));
+		}
 		if (fork()==0)
 		{
 			close(db_server_tcp_sk);
+			// Do some response to client's request.
 			resp_msg(clnt_tcp_sk);
 			close(clnt_tcp_sk);
 			return 0;
@@ -165,36 +164,36 @@ int resp_msg(int clnt_tcp_sk){
 	int msg_len;
 	char buf[12];
 
-	msg_len = recv(clnt_tcp_sk, buf, sizeof(int)*3, 0);
-	if (msg_len != 8 && msg_len != 12)
-	{
-		printf("Wrong quest from client\n");
-		return -1;
-	}
-	// Get command: query or update
-	iptr = (int *)&buf[0];
-	cmd = ntohl(*iptr);
-	if (cmd == 1000) // Query
-	{
-		// Get account number
-		iptr = (int *)&buf[4];
-		acct = ntohl(*iptr);
-		return query_file(acct, clnt_tcp_sk);
-	}
-	else if (cmd == 1001) // Update
-	{
-		// Get account number
-		iptr = (int *)&buf[4];
-		acct = ntohl(*iptr);
-		// Get updated value
-		iptr = (int *)&buf[8];
-		*iptr = ntohl(*iptr);
-		amnt = (float *)&buf[8];
-		return update_file(acct, *amnt, clnt_tcp_sk);
-	}
-	else{
-		printf("Wrong quest from client\n");
-		return -1;
+	while(1){
+		// Receive message sent from client.
+		msg_len = recv(clnt_tcp_sk, buf, sizeof(int)*3, 0);
+		if (strcmp(buf, "quit") == 0)
+		{
+			return 1;
+		}
+		// Get command: query or update
+		iptr = (int *)&buf[0];
+		cmd = ntohl(*iptr);
+		if (cmd == 1000) // Query
+		{
+			// Get account number
+			iptr = (int *)&buf[4];
+			acct = ntohl(*iptr);
+			// Implement file query
+			query_file(acct, clnt_tcp_sk);
+		}
+		else if (cmd == 1001) // Update
+		{
+			// Get account number
+			iptr = (int *)&buf[4];
+			acct = ntohl(*iptr);
+			// Get updated value
+			iptr = (int *)&buf[8];
+			*iptr = ntohl(*iptr);
+			amnt = (float *)&buf[8];
+			// Implement file update
+			update_file(acct, *amnt, clnt_tcp_sk);
+		}
 	}
 }
 
@@ -210,8 +209,9 @@ int query_file(int acct, int clnt_tcp_sk){
 		rslt = read(fd, &recrd, sizeof(struct record));
 		if (rslt != sizeof(struct record))
 		{
-			printf("Query failed\n");
 			close(fd);
+			strcpy(buf, "query failed");
+			send(clnt_tcp_sk, buf, strlen(buf), 0);			
 			return -1;
 		}
 		if (recrd.acctnum == acct)
@@ -239,14 +239,15 @@ int update_file(int acct, float value, int clnt_tcp_sk){
 	float rtn_value;
 	char buf[100];
 	char tmp[10];
-	memset(buf, '\0', 100);
 	fd = open("db18", O_RDWR);
 	while(1){
+		memset(buf, '\0', 100);
 		rslt = read(fd, &recrd, sizeof(struct record));
 		if (rslt != sizeof(struct record))
 		{
-			printf("Update failed\n");
 			close(fd);
+			strcpy(buf, "update failed");
+			send(clnt_tcp_sk, buf, strlen(buf), 0);				
 			return -1;
 		}
 		if (recrd.acctnum == acct)
@@ -254,8 +255,10 @@ int update_file(int acct, float value, int clnt_tcp_sk){
 			rtn_value = recrd.value;
 			recrd.value = value;
 			lseek(fd, -sizeof(struct record), SEEK_CUR);
+			// Lock file section to protect C.S
 			lockf(fd, F_LOCK, sizeof(struct record));
 			write(fd, &recrd, sizeof(struct record));
+			// Unlock file section
 			lockf(fd, F_ULOCK, sizeof(struct record));
 			close(fd);
 			strcpy(buf, recrd.name);
@@ -265,7 +268,6 @@ int update_file(int acct, float value, int clnt_tcp_sk){
 			strcat(buf, " ");
 			sprintf(tmp, "%.2f", rtn_value);
 			strcat(buf, tmp);
-			printf("%s", buf);
 			send(clnt_tcp_sk, buf, strlen(buf), 0);
 			break;
 		}

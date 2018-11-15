@@ -14,6 +14,11 @@ import (
 
 
 func main() {
+	// Check input
+	if len(os.Args) != 2 {
+		fmt.Println("Please input service-map server name.")
+		return
+	}
 	// Get service-map server IP
 	addrs, err := net.LookupHost(os.Args[1])
 	CheckError(err)
@@ -45,16 +50,9 @@ func main() {
 	// Set up TCP client socket for connection between db server and client
 	conn, err := net.Dial("tcp", string(buff[0:n]))
 	CheckError(err)
+
+	// Implement communication with database file on db server.
 	db_oprt(conn)
-	// fmt.Println("messge out ......") 
-	// fmt.Println([]byte(hostaddrs[0])) 
-	// n, err = conn.Write([]byte(hostaddrs[0]))
-	// fmt.Println("send out",n,"characters")
-	// n, err = conn.Read(buff)
-	// fmt.Println("messge back ......") 
-	// fmt.Println("send back",n,"characters")
-	// s = strings.Split(string(buff[0:n]), ":")
-	// fmt.Println(s[0])
 	conn.Close()	
 }
 
@@ -75,39 +73,47 @@ func db_oprt(con net.Conn){
 	buf_acct := make([]byte, 4)
 	buf_amnt := make([]byte, 4)
 	buf := make([]byte, 30)
+	// Preparation for user command input
 	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Scan()
-	s := strings.Split(scanner.Text(), " ")
-	if strings.Compare(s[0], "query") == 0 {
-		cmd = 1000
-		iprt = (*uint32)(unsafe.Pointer(&cmd))
-		binary.BigEndian.PutUint32(buf_cmd, *iprt)
-		acct, err = strconv.Atoi(s[1])
+	for scanner.Scan() {
+		if strings.Compare(scanner.Text(), "quit") == 0 {
+			con.Write([]byte("quit"))
+			return
+		}
+		s := strings.Split(scanner.Text(), " ")
+		if strings.Compare(s[0], "query") == 0 { // User requests query 
+			cmd = 1000
+			iprt = (*uint32)(unsafe.Pointer(&cmd))
+			binary.BigEndian.PutUint32(buf_cmd, *iprt)
+			acct, err = strconv.Atoi(s[1])
+			CheckError(err)
+			iprt = (*uint32)(unsafe.Pointer(&acct))
+			binary.BigEndian.PutUint32(buf_acct, *iprt)
+			s := [][]byte{buf_cmd, buf_acct}
+			buf_query := bytes.Join(s, []byte(""))
+			con.Write(buf_query)			
+		} else if strings.Compare(s[0], "update") == 0 { // User requests update
+			cmd = 1001
+			iprt = (*uint32)(unsafe.Pointer(&cmd))
+			binary.BigEndian.PutUint32(buf_cmd, *iprt)
+			acct, err = strconv.Atoi(s[1])
+			CheckError(err)
+			iprt = (*uint32)(unsafe.Pointer(&acct))
+			binary.BigEndian.PutUint32(buf_acct, *iprt)
+			value, err := strconv.ParseFloat(s[2], 32)
+			CheckError(err)
+			amnt = float32(value)
+			iprt = (*uint32)(unsafe.Pointer(&amnt))
+			binary.BigEndian.PutUint32(buf_amnt, *iprt)
+			s := [][]byte{buf_cmd, buf_acct, buf_amnt}
+			buf_update := bytes.Join(s, []byte(""))
+			con.Write(buf_update)
+		} else {
+			fmt.Println("Wrong command")
+			continue
+		}
+		n, err := con.Read(buf)
 		CheckError(err)
-		iprt = (*uint32)(unsafe.Pointer(&acct))
-		binary.BigEndian.PutUint32(buf_acct, *iprt)
-		s := [][]byte{buf_cmd, buf_acct}
-		buf_query := bytes.Join(s, []byte(""))
-		con.Write(buf_query)			
-	} else if strings.Compare(s[0], "update") == 0 {
-		cmd = 1001
-		iprt = (*uint32)(unsafe.Pointer(&cmd))
-		binary.BigEndian.PutUint32(buf_cmd, *iprt)
-		acct, err = strconv.Atoi(s[1])
-		CheckError(err)
-		iprt = (*uint32)(unsafe.Pointer(&acct))
-		binary.BigEndian.PutUint32(buf_acct, *iprt)
-		value, err := strconv.ParseFloat(s[2], 32)
-		CheckError(err)
-		amnt = float32(value)
-		iprt = (*uint32)(unsafe.Pointer(&amnt))
-		binary.BigEndian.PutUint32(buf_amnt, *iprt)
-		s := [][]byte{buf_cmd, buf_acct, buf_amnt}
-		buf_update := bytes.Join(s, []byte(""))
-		con.Write(buf_update)
-	} else {
-		fmt.Println("Wrong command")
+		fmt.Println(string(buf[0:n]))
 	}
-	n, err := con.Read(buf)
-	fmt.Println(string(buf[0:n]))
 }
