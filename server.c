@@ -12,6 +12,13 @@
 #define BUFMAX 2048
 #define UDP_PORT 23997
 
+struct record{
+	int acctnum;
+	char name[20];
+	float value;
+	int age;
+};
+
 
 void signal_catcher(int the_sig){
 	wait(0);
@@ -34,6 +41,7 @@ int main(int argc,char *argv[])
 	int len = sizeof(db_server_tcp_addr);
 	// sending message
 	char buf[BUFMAX];
+	char buf_n[BUFMAX];
 	struct hostent *host;
 	// Client TCP socket
 	int clnt_tcp_sk;
@@ -132,14 +140,23 @@ int main(int argc,char *argv[])
 		if (fork()==0)
 		{
 			close(db_server_tcp_sk);
+			memset(buf, '\0', BUFMAX);
 			msg_len = recv(clnt_tcp_sk, buf, BUFMAX, 0);
-			printf("Service Requested from %s\n", buf);
-			if (send(clnt_tcp_sk, buf, msg_len, 0) == -1)
-			{
-				perror("send error");
-				return -1;
-			}
-			close(clnt_tcp_sk);
+			printf("receive %d char\n", msg_len);
+			// Response to received message
+			resp_msg(buf, msg_len);
+			// // Send back to client
+			// if (strcmp(buf, "123") == 0)
+			// {
+			// 	printf("Service Requested from client\n");
+			// }
+			// // printf("Service Requested from %s\n", buf_n);
+			// if (send(clnt_tcp_sk, buf, msg_len, 0) == -1)
+			// {
+			// 	perror("send error");
+			// 	return -1;
+			// }
+			// close(clnt_tcp_sk);
 			return 0;
 		}
 		else{
@@ -147,4 +164,107 @@ int main(int argc,char *argv[])
 		}
 	}while(1);
 	return 0;
+}
+
+
+int resp_msg(struct sockaddr_in clnt_tcp_sk){
+	int cmd;
+	int acct;
+	float amnt;
+	int *ptr;
+	int msg_len;
+
+	msg_len = recv(clnt_tcp_sk, &cmd, sizeof(int), 0);
+	cmd = ntohl(cmd);
+	if (cmd == 1000)
+	{
+		msg_len = recv(clnt_tcp_sk, &acct, sizeof(int), 0);
+		acct = ntohl(acct);
+		return query_file(acct, clnt_tcp_sk);
+	}
+	else if (cmd == 1001)
+	{
+		msg_len = recv(clnt_tcp_sk, &acct, sizeof(int), 0);
+		acct = ntohl(acct);
+		msg_len = recv(clnt_tcp_sk, &amnt, sizeof(int), 0);
+		ptr = (int*)&amnt;
+		*ptr = ntohl(*ptr);
+		return update_file(acct, value, clnt_tcp_sk);
+	}
+}
+
+int query_file(int acct, struct sockaddr_in clnt_tcp_sk){
+	struct record recrd;
+	int fd;
+	int rslt;
+	char buf[100];
+	char tmp[10];
+	fd = open("db18", O_RDWR);
+	while(1){
+		rslt = read(fd, recrd, sizeof(struct record));
+		if (rslt != sizeof(struct record))
+		{
+			printf("Query failed\n");
+			close(clnt_tcp_sk);
+			close(fd);
+			return -1;
+		}
+		if (recrd.acctnum == acct)
+		{	
+			close(fd);
+			strcpy(buf, recrd.name);
+			strcat(buf, " ");
+			sprintf(tmp, "%d", recrd.acctnum);
+			strcat(buf, tmp);
+			strcat(buf, " ");
+			sprintf(tmp, "%.2f", recrd.value);
+			strcat(buf, tmp);
+			printf("%s", buf);
+			send(clnt_tcp_sk, buf, st, strlen(buf));
+			close(clnt_tcp_sk);
+			break;
+		}
+	}
+	return 1;
+}
+
+
+int update_file(int acct, float value, struct sockaddr_in clnt_tcp_sk){
+	struct record recrd;
+	int fd;
+	int rslt;
+	char buf[100];
+	char tmp[10];
+	fd = open("db18", O_RDWR);
+	while(1){
+		rslt = read(fd, recrd, sizeof(struct record));
+		if (rslt != sizeof(struct record))
+		{
+			printf("Update failed\n");
+			close(clnt_tcp_sk);
+			close(fd);
+			return -1;
+		}
+		if (recrd.acctnum == acct)
+		{
+			recrd.value = value;
+			lseek(fd, -sizeof(struct record), SEEK_CUR);
+			lockf(fd, F_LOCK, sizeof(struct record));
+			write(fd, recrd, sizeof(struct record));
+			lockf(fd, F_ULOCK, sizeof(struct record));
+			close(fd);
+			strcpy(buf, recrd.name);
+			strcat(buf, " ");
+			sprintf(tmp, "%d", recrd.acctnum);
+			strcat(buf, tmp);
+			strcat(buf, " ");
+			sprintf(tmp, "%.2f", recrd.value);
+			strcat(buf, tmp);
+			printf("%s", buf);
+			send(clnt_tcp_sk, buf, st, strlen(buf));
+			close(clnt_tcp_sk);
+			break;
+		}
+	}
+	return 1;
 }

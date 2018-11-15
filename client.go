@@ -105,8 +105,7 @@ func db_oprt(con net.Conn){
 		} else {
 			CheckError("Wrong command")
 		}
-		
-		// n, err = conn.Read(buff)
-		// fmt.Println(string(buff[0:n]))
+		n, err = conn.Read(buff)
+		fmt.Println(string(buff[0:n]))
 	}
 }
