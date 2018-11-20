@@ -20,9 +20,10 @@ struct record{
 	int age;
 };
 
-int resp_msg(int clnt_tcp_sk);
+int resp_msg(int clnt_tcp_sk, struct sockaddr_in clnt_tcp_addr);
 int query_file(int acct, int clnt_tcp_sk);
 int update_file(int acct, float value, int clnt_tcp_sk);
+
 
 void signal_catcher(int the_sig){
 	wait(0);
@@ -137,14 +138,14 @@ int main(int argc,char *argv[])
 			perror("accept error");
 			return 5;
 		}
-		else{
-			printf("Service Requested from %s\n", inet_ntoa(clnt_tcp_addr.sin_addr));
-		}
+		// else{
+		// 	printf("Service Requested from %s\n", inet_ntoa(clnt_tcp_addr.sin_addr));
+		// }
 		if (fork()==0)
 		{
 			close(db_server_tcp_sk);
-			// Do some response to client's request.
-			resp_msg(clnt_tcp_sk);
+			// Do some response to client's request.			
+			resp_msg(clnt_tcp_sk, clnt_tcp_addr);
 			close(clnt_tcp_sk);
 			return 0;
 		}
@@ -156,44 +157,43 @@ int main(int argc,char *argv[])
 }
 
 
-int resp_msg(int clnt_tcp_sk){
+int resp_msg(int clnt_tcp_sk, struct sockaddr_in clnt_tcp_addr){
 	int cmd;
 	int acct;
 	float *amnt;
 	int *iptr;
 	int msg_len;
 	char buf[12];
-
-	while(1){
-		// Receive message sent from client.
-		msg_len = recv(clnt_tcp_sk, buf, sizeof(int)*3, 0);
-		if (strcmp(buf, "quit") == 0)
-		{
-			return 1;
-		}
-		// Get command: query or update
-		iptr = (int *)&buf[0];
-		cmd = ntohl(*iptr);
-		if (cmd == 1000) // Query
-		{
-			// Get account number
-			iptr = (int *)&buf[4];
-			acct = ntohl(*iptr);
-			// Implement file query
-			query_file(acct, clnt_tcp_sk);
-		}
-		else if (cmd == 1001) // Update
-		{
-			// Get account number
-			iptr = (int *)&buf[4];
-			acct = ntohl(*iptr);
-			// Get updated value
-			iptr = (int *)&buf[8];
-			*iptr = ntohl(*iptr);
-			amnt = (float *)&buf[8];
-			// Implement file update
-			update_file(acct, *amnt, clnt_tcp_sk);
-		}
+	// Receive message sent from client.
+	msg_len = recv(clnt_tcp_sk, buf, sizeof(int)*3, 0);
+	if (strcmp(buf, "quit") == 0)
+	{
+		return 1;
+	}
+	// Get command: query or update
+	iptr = (int *)&buf[0];
+	cmd = ntohl(*iptr);
+	if (cmd == 1000) // Query
+	{
+		// Get account number
+		iptr = (int *)&buf[4];
+		acct = ntohl(*iptr);
+		// Implement file query
+		query_file(acct, clnt_tcp_sk);
+		printf("Service Requested from %s\n", inet_ntoa(clnt_tcp_addr.sin_addr));
+	}
+	else if (cmd == 1001) // Update
+	{
+		// Get account number
+		iptr = (int *)&buf[4];
+		acct = ntohl(*iptr);
+		// Get updated value
+		iptr = (int *)&buf[8];
+		*iptr = ntohl(*iptr);
+		amnt = (float *)&buf[8];
+		// Implement file update
+		update_file(acct, *amnt, clnt_tcp_sk);
+		printf("Service Requested from %s\n", inet_ntoa(clnt_tcp_addr.sin_addr));
 	}
 }
 
@@ -236,7 +236,6 @@ int update_file(int acct, float value, int clnt_tcp_sk){
 	struct record recrd;
 	int fd;
 	int rslt;
-	float rtn_value;
 	char buf[100];
 	char tmp[10];
 	fd = open("db18", O_RDWR);
@@ -252,8 +251,7 @@ int update_file(int acct, float value, int clnt_tcp_sk){
 		}
 		if (recrd.acctnum == acct)
 		{
-			rtn_value = recrd.value;
-			recrd.value = value;
+			recrd.value = recrd.value + value;
 			lseek(fd, -sizeof(struct record), SEEK_CUR);
 			// Lock file section to protect C.S
 			lockf(fd, F_LOCK, sizeof(struct record));
@@ -266,7 +264,7 @@ int update_file(int acct, float value, int clnt_tcp_sk){
 			sprintf(tmp, "%d", recrd.acctnum);
 			strcat(buf, tmp);
 			strcat(buf, " ");
-			sprintf(tmp, "%.2f", rtn_value);
+			sprintf(tmp, "%.2f", recrd.value);
 			strcat(buf, tmp);
 			send(clnt_tcp_sk, buf, strlen(buf), 0);
 			break;
